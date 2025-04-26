@@ -167,7 +167,7 @@ for k,(i,j) in enumerate(st.session_state.elements):
     st.write(P_list[-1])
 st.session_state.P_list = P_list
 
-if st.button("Lắp ráp Global Load Vector P từ Pe"):
+if st.button("Lắp ráp Pe"):
     P_elem = np.zeros((total_dof,1))
     for k,pe in enumerate(st.session_state.P_list):
         dofs = st.session_state.index_elems[k]
