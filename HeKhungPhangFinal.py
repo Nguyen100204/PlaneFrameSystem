@@ -196,7 +196,7 @@ for i in range(total_dof):
         pe_val = 0
         expr_total = simplify(expr_user)
 
-    st.markdown(f"→ Tổng biểu thức: `Pn[{i+1}] = {expr_user} + {pe_val} = {expr_total}`")
+    st.markdown(f"→`P[{i+1}] = {expr_user} + {pe_val} = {expr_total}`")
     Pn_expr.append(str(expr_total))
 
 st.session_state.Pn_expr = Pn_expr
