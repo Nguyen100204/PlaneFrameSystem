@@ -177,9 +177,8 @@ with st.expander("📘 Hướng dẫn sử dụng"):
 9. Nhập **các chỉ số q=0** (bậc tự do cố định).
 10. Bấm **"Tính chuyển vị q"**.
 11. Bấm **"Tính phản lực liên kết R"**.
-""")
 
-  Lưu ý:
+* Lưu ý:
 - Mỗi node có 3 bậc tự do (dof): dịch chuyển x, dịch chuyển y, quay.
 - Chỉ số q bắt đầu từ 1.
     """)
