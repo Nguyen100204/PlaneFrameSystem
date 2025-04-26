@@ -126,9 +126,9 @@ P_list=[]
 for k,(i,j) in enumerate(st.session_state.elements):
     st.markdown(f"PT{k+1}")
     c1,c2,c3 = st.columns(3)
-    a    = float(c1.number_input(f"a PT{k+1}",0.0, key=f"a{k}"))
-    Type = c2.selectbox(f"Type PT{k+1}",["p0+","p0-","q0+","q0-","M+","M-","P+","P-"],key=f"t{k}")
-    Q    = float(c3.number_input(f"Q PT{k+1}",0.0, key=f"Q{k}"))
+    a    = float(c1.number_input(f"Khoảng cách nút i đến tải",0.0, key=f"a{k}"))
+    Type = c2.selectbox(f"Loại tải trọng",["p0+","p0-","q0+","q0-","M+","M-","P+","P-"],key=f"t{k}")
+    Q    = float(c3.number_input(f"Giá trị lực tác dụng",0.0, key=f"Q{k}"))
     Ke,L = st.session_state.Ke_list[k], st.session_state.L_list[k]
     if Ke is None:
         P_list.append([0]*6)
