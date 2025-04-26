@@ -49,10 +49,10 @@ for i in range(int(num_elems)):
 st.session_state.elements = elements
 
 # --- Nhập DOF indices ---
-st.subheader("DOF indices local → global mỗi PT")
+st.subheader("DOF Elements")
 index_elems = []
 for i in range(int(num_elems)):
-    s = st.text_input(f"PT{i+1} DOF indices", "1 2 3 4 5 6", key=f"idx{i}")
+    s = st.text_input(f"DOF Element {i+1}", "1 2 3 4 5 6", key=f"idx{i}")
     try:
         idx = [int(x)-1 for x in s.split()]
         index_elems.append(idx if len(idx)==6 else [0]*6)
