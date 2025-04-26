@@ -23,34 +23,33 @@ for key in [
     "coords", "elements", "index_elems",
     "Ke_list", "L_list", "K_global",
     "P_list", "P_elem", "Pn_expr",
-    "q_known", "q_full", "R_reactions"
+    "q_known", "q_full"
 ]:
     if key not in st.session_state:
         st.session_state[key] = None
 
 # --- Nhập tọa độ Node ---
-cols = st.columns(1)
 st.subheader("Tọa độ Node (x, y)")
 coords = []
 for i in range(int(num_nodes)):
-    c1, c2 = st.columns(2)
+    c1,c2 = st.columns(2)
     x = c1.number_input(f"x{i+1}", key=f"x{i}", value=0.0)
     y = c2.number_input(f"y{i+1}", key=f"y{i}", value=0.0)
     coords.append((x,y))
 st.session_state.coords = coords
 
-# --- Nhập kết nối phần tử (i→j) ---
+# --- Nhập phần tử (i → j) ---
 st.subheader("Cấu trúc phần tử (i → j)")
 elements = []
 for i in range(int(num_elems)):
     c1,c2 = st.columns(2)
     ni = c1.number_input(f"Node i - PT{i+1}", 1, int(num_nodes), key=f"ei{i}")
     nj = c2.number_input(f"Node j - PT{i+1}", 1, int(num_nodes), key=f"ej{i}")
-    elements.append((ni-1, nj-1))
+    elements.append((ni-1,nj-1))
 st.session_state.elements = elements
 
 # --- Nhập DOF indices ---
-st.subheader("DOF indices local→global mỗi PT")
+st.subheader("DOF indices local → global mỗi PT")
 index_elems = []
 for i in range(int(num_elems)):
     s = st.text_input(f"PT{i+1} DOF indices", "1 2 3 4 5 6", key=f"idx{i}")
@@ -76,12 +75,12 @@ if st.button("Vẽ sơ đồ khung"):
 # --- Tính Ke & K_global ---
 dof_per_node = 3
 total_dof    = int(num_nodes)*dof_per_node
+K_global     = np.zeros((total_dof, total_dof))
 
 def compute_Ke(i,j):
     xi,yi = st.session_state.coords[i]; xj,yj = st.session_state.coords[j]
     L = sqrt((xj-xi)**2 + (yj-yi)**2)
-    if L==0:
-        return None,0.0
+    if L==0: return None, 0.0
     alpha = radians(degrees(np.arctan2(yj-yi, xj-xi)))
     c,s = cos(alpha), sin(alpha)
     Bk = 12*I/(L**2)
@@ -90,7 +89,7 @@ def compute_Ke(i,j):
     a12=(A-Bk)*c*s/L
     a13=-(Bk*L*s)/(2*L)
     a23=(Bk*L*c)/(2*L)
-    a33, a36 = 4*I/L, 2*I/L
+    a33,a36 = 4*I/L,2*I/L
     Ke = np.array([
         [ a11, a12, a13, -a11,-a12, a13],
         [ a12, a22, a23, -a12,-a22, a23],
@@ -103,41 +102,39 @@ def compute_Ke(i,j):
 
 if st.button("Tính Ke & K tổng thể"):
     Ke_list, L_list = [], []
-    K_global = np.zeros((total_dof, total_dof))
+    Kg = np.zeros((total_dof, total_dof))
     for k,(i,j) in enumerate(st.session_state.elements):
         Ke,L = compute_Ke(i,j)
-        Ke_list.append(Ke)
-        L_list.append(L)
+        Ke_list.append(Ke); L_list.append(L)
         if Ke is not None:
             dofs = st.session_state.index_elems[k]
             for m in range(6):
                 for n in range(6):
-                    K_global[dofs[m],dofs[n]] += Ke[m,n]
+                    Kg[dofs[m],dofs[n]] += Ke[m,n]
     st.session_state.Ke_list = Ke_list
-    st.session_state.L_list = L_list
-    st.session_state.K_global = K_global.copy()
+    st.session_state.L_list  = L_list
+    st.session_state.K_global = Kg.copy()
     st.subheader("Ke từng phần tử")
-    for k,Ke in enumerate(Ke_list,1):
-        st.write(f"PT{k} (L={L_list[k-1]:.3f})"); st.write(Ke)
-    st.subheader("Ma trận K tổng thể")
-    st.write(np.round(K_global,5))
+    for idx,Ke in enumerate(Ke_list,1):
+        st.write(f"PT{idx} (L={L_list[idx-1]:.3f})"); st.write(Ke)
+    st.subheader("Ma trận độ cứng tổng thể K")
+    st.write(np.round(Kg,5))
 
 # --- Nhập Pe & lắp P_elem ---
 st.subheader("Nhập tải phần tử (Pe)")
-P_list = []
+P_list=[]
 for k,(i,j) in enumerate(st.session_state.elements):
     st.markdown(f"PT{k+1}")
     c1,c2,c3 = st.columns(3)
-    a = float(c1.number_input(f"a PT{k+1}",0.0,key=f"a{k}"))
+    a    = float(c1.number_input(f"a PT{k+1}",0.0, key=f"a{k}"))
     Type = c2.selectbox(f"Type PT{k+1}",["p0+","p0-","q0+","q0-","M+","M-","P+","P-"],key=f"t{k}")
-    Q = float(c3.number_input(f"Q PT{k+1}",0.0,key=f"Q{k}"))
+    Q    = float(c3.number_input(f"Q PT{k+1}",0.0, key=f"Q{k}"))
     Ke,L = st.session_state.Ke_list[k], st.session_state.L_list[k]
     if Ke is None:
         P_list.append([0]*6)
     else:
         alpha = radians(degrees(np.arctan2(st.session_state.coords[j][1]-st.session_state.coords[i][1],
                                             st.session_state.coords[j][0]-st.session_state.coords[i][0])))
-        # (dùng công thức gốc giống trước)
         if Type=="p0+":
             P1,P2,P3 = Q*L*cos(alpha)/2, -Q*L*sin(alpha)/2, 0
             P4,P5,P6 = P1,P2,0
@@ -180,14 +177,14 @@ if st.button("Lắp ráp Global Load Vector P từ Pe"):
     st.subheader("Global Load Vector P")
     st.write(np.round(P_elem,5))
 
-# --- Nhập nodal loads Pn biểu thức ---
+# --- Nhập Pn biểu thức ---
 st.subheader("Nhập tải tại DOF (Pn biểu thức)")
 Pn_expr = []
 for i in range(total_dof):
     s = st.text_input(f"Pn[{i+1}]", "0", key=f"Pn{i}")
     expr = str(simplify(sympify(s)))
     Pn_expr.append(expr)
-    st.write(expr)
+    st.write(f"Pn[{i+1}] = {expr}")
 st.session_state.Pn_expr = Pn_expr
 
 # --- Nhập q_known ngoài nút ---
@@ -204,7 +201,6 @@ if st.button("Tính chuyển vị q"):
     else:
         Kg = st.session_state.K_global
         qk = st.session_state.q_known
-        # giảm bậc tự do
         K_red = np.delete(Kg, qk, axis=0)
         K_red = np.delete(K_red, qk, axis=1)
         P_red = np.delete(st.session_state.P_elem, qk, axis=0)
@@ -224,26 +220,51 @@ if st.button("Tính chuyển vị q"):
             st.subheader("q_full")
             st.write(np.round(q_full.T,5))
 
-# --- Tính phản lực liên kết R (numeric) ---
-if st.button("Tính phản lực liên kết"):
-    if st.session_state.q_full is None:
-        st.error("Chưa tính q_full")
+# --- Tính phản lực liên kết symbolically từ Pn_expr và q_full ---
+if st.button("Tính PLLK (phản lực liên kết)"):
+    if st.session_state.q_full is None or st.session_state.K_global is None:
+        st.error("Phải tính q_full và K_global trước")
     else:
-        R = np.dot(st.session_state.K_global, E*st.session_state.q_full)
-        st.session_state.R_reactions = R
-        st.subheader("Phản lực liên kết R")
-        st.write(np.round(R.T,5))
+        # P_goc = K_global * E * q_full
+        P_goc = np.dot(st.session_state.K_global, E * st.session_state.q_full).flatten()
+        P_an = st.session_state.Pn_expr  # list of strings
+        # Tập hợp ẩn
+        all_syms = set()
+        for expr in P_an:
+            all_syms |= sympify(expr).free_symbols
+        if not all_syms:
+            st.info("Không tìm thấy ẩn trong Pn")
+        else:
+            results = []
+            for i, expr in enumerate(P_an):
+                try:
+                    left = sympify(expr)
+                    right = float(P_goc[i])
+                    eq = Eq(left, right)
+                    syms = eq.free_symbols
+                    if len(syms)==1:
+                        var = syms.pop()
+                        sol = solve(eq, var)
+                        if sol:
+                            results.append(f"{var} = {round(float(sol[0]),5)}")
+                except Exception:
+                    continue
+            if results:
+                st.subheader("Kết quả phản lực liên kết (PLLK)")
+                for r in results:
+                    st.write(r)
+            else:
+                st.info("Không giải được phản lực liên kết")
 
 # --- Hướng dẫn ---
-with st.expander("📘 Hướng dẫn"):
+with st.expander("📘 Hướng dẫn sử dụng"):
     st.markdown("""
-1. Nhập E,v,A,I; Node; PT; DOF.
-2. Vẽ khung.
-3. Tính Ke & K.
-4. Nhập Pe.
-5. Lắp P_elem.
-6. Nhập Pn_expr.
-7. Nhập q_known.
-8. Tính q.
-9. Tính PLLK.
+1. Nhập E, v, A, I.
+2. Chọn Node, phần tử, DOF indices.
+3. Vẽ sơ đồ khung.
+4. Tính Ke & K tổng thể.
+5. Nhập Pe → lắp P_elem.
+6. Nhập Pn biểu thức.
+7. Nhập q=0 → tính q_full.
+8. Bấm **Tính PLLK**.
 """)
