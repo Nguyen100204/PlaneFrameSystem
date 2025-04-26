@@ -187,15 +187,20 @@ for i in range(total_dof):
     except:
         expr_user = sympify("0")
 
-    # Nếu đã có P_elem, cộng vào
+    # Lấy giá trị tải phần tử Pe nếu có
     if st.session_state.P_elem is not None:
         pe_val = float(st.session_state.P_elem[i, 0])
         expr_total = simplify(expr_user + pe_val)
+        st.markdown(f"- Giá trị Pe[{i+1}] = `{pe_val}`")
     else:
+        pe_val = 0
         expr_total = simplify(expr_user)
+
+    st.markdown(f"→ Tổng biểu thức: `Pn[{i+1}] = {expr_user} + {pe_val} = {expr_total}`")
     Pn_expr.append(str(expr_total))
-    st.write(f"Pn[{i+1}] = {expr_total}")
+
 st.session_state.Pn_expr = Pn_expr
+
 
 # --- Nhập q_known ngoài nút ---
 q_str = st.text_input("Indices q=0 (vd: 1 4 5)", key="qfix")
