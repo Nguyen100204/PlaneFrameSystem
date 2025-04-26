@@ -2,20 +2,20 @@ import streamlit as st
 import numpy as np
 import matplotlib.pyplot as plt
 from math import cos, sin, radians, degrees, sqrt
-from sympy import sympify, simplify
+from sympy import sympify, simplify, Symbol, Matrix, solve
 
-# --- Cấu hình ---
+# --- Cấu hình trang ---
 st.set_page_config(layout="wide")
 st.title("Mô phỏng Hệ Khung Phẳng")
 
-# --- Sidebar: Vật liệu & Thông số ---
+# --- Sidebar: Thông số vật liệu & hình học ---
 st.sidebar.header("Thông số Vật liệu & Hình học")
 E = float(st.sidebar.text_input("E (N/m²)", "2e11"))
 v = float(st.sidebar.text_input("v", "0.3"))
 A = float(st.sidebar.text_input("A (m²)", "0.01"))
 I = float(st.sidebar.text_input("I (m⁴)", "0.00001"))
 st.sidebar.markdown("---")
-num_nodes = st.sidebar.number_input("Số Node", min_value=2, step=1)
+num_nodes = st.sidebar.number_input("Số Node",    min_value=2, step=1)
 num_elems = st.sidebar.number_input("Số phần tử", min_value=1, step=1)
 
 # --- Nhập tọa độ Node ---
@@ -27,7 +27,7 @@ for i in range(int(num_nodes)):
     y = c2.number_input(f"y{i+1}", key=f"y{i}", value=0.0)
     coords.append((x, y))
 
-# --- Nhập phần tử (i→j) ---
+# --- Nhập kết nối phần tử (i → j) ---
 elements = []
 st.subheader("Cấu trúc phần tử (i → j)")
 for i in range(int(num_elems)):
@@ -36,7 +36,7 @@ for i in range(int(num_elems)):
     nj = c2.number_input(f"Node j - PT{i+1}", 1, int(num_nodes), key=f"ej{i}")
     elements.append((int(ni)-1, int(nj)-1))
 
-# --- Nhập chỉ số DOF cho từng phần tử ---
+# --- Nhập DOF indices cho mỗi phần tử ---
 index_elems = []
 st.subheader("Chỉ số DOF local → global cho mỗi PT")
 for i in range(int(num_elems)):
@@ -47,7 +47,7 @@ for i in range(int(num_elems)):
     except:
         index_elems.append([0]*6)
 
-# --- Vẽ khung ---
+# --- Nút vẽ sơ đồ khung ---
 if st.button("Vẽ sơ đồ khung"):
     fig, ax = plt.subplots()
     for k,(i,j) in enumerate(elements):
@@ -59,7 +59,7 @@ if st.button("Vẽ sơ đồ khung"):
     ax.set_aspect("equal"); ax.set_title("Sơ đồ Hệ Khung")
     st.pyplot(fig)
 
-# --- Tính Ke & K ---
+# --- Tính ma trận Ke & lắp K_global ---
 dof_per_node = 3
 total_dof    = int(num_nodes)*dof_per_node
 K_global     = np.zeros((total_dof, total_dof))
@@ -67,6 +67,8 @@ K_global     = np.zeros((total_dof, total_dof))
 def compute_Ke(i,j):
     xi,yi = coords[i]; xj,yj = coords[j]
     L = sqrt((xj-xi)**2 + (yj-yi)**2)
+    if L == 0:
+        return None, 0.0
     alpha = radians(degrees(np.arctan2(yj-yi, xj-xi)))
     c, s = cos(alpha), sin(alpha)
     Bk = 12*I/(L**2)
@@ -90,6 +92,9 @@ if st.button("Tính Ke & K tổng thể"):
     st.subheader("Ke từng phần tử")
     for k,(i,j) in enumerate(elements):
         Ke, L = compute_Ke(i,j)
+        if Ke is None:
+            st.error(f"PT{k+1}: hai Node trùng tọa độ (L=0)")
+            continue
         st.markdown(f"- PT{k+1} (L={L:.3f}):")
         st.text(Ke)
         dofs = index_elems[k]
@@ -99,7 +104,7 @@ if st.button("Tính Ke & K tổng thể"):
     st.subheader("Ma trận độ cứng tổng thể K")
     st.text(np.round(K_global,5))
 
-# --- Nhập tải phần tử Pe (bây giờ thành P_list) ---
+# --- Nhập tải phần tử Pe ---
 st.subheader("Nhập tải phần tử (Pe)")
 P_list = []
 for k,(i,j) in enumerate(elements):
@@ -108,44 +113,44 @@ for k,(i,j) in enumerate(elements):
     a = float(c1.number_input(f"a PT{k+1}", value=0.0, key=f"a{k}"))
     Type = c2.selectbox(f"Loại PT{k+1}", ["p0+","p0-","q0+","q0-","M+","M-","P+","P-"], key=f"t{k}")
     Q = float(c3.number_input(f"Q PT{k+1}", value=0.0, key=f"Q{k}"))
-    _, L = compute_Ke(i,j)
-    alpha = radians(degrees(np.arctan2(coords[j][1]-coords[i][1], coords[j][0]-coords[i][0])))
-    # công thức định nghĩa Pe như Tkinter gốc
-    if Type=="p0+":
-        P1=(Q*L*cos(alpha))/2; P2=-(Q*L*sin(alpha))/2; P3=0
-        P4=P1; P5=P2; P6=0
-    elif Type=="p0-":
-        P1=-(Q*L*cos(alpha))/2; P2=(Q*L*sin(alpha))/2; P3=0
-        P4=P1; P5=P2; P6=0
-    elif Type=="q0+":
-        P_1=(Q*L)/2; P_2=(Q*L**2)/12; P_3=(Q*L)/2; P_4=-(Q*L**2)/12
-        P1=-sin(alpha)*P_1; P2=cos(alpha)*P_1; P3=P_2
-        P4=-sin(alpha)*P_3; P5=cos(alpha)*P_3; P6=P_4
-    elif Type=="q0-":
-        P_1=-(Q*L)/2; P_2=-(Q*L**2)/12; P_3=-(Q*L)/2; P_4=(Q*L**2)/12
-        P1=-sin(alpha)*P_1; P2=cos(alpha)*P_1; P3=P_2
-        P4=-sin(alpha)*P_3; P5=cos(alpha)*P_3; P6=P_4
-    elif Type in ("M+","M-","P+","P-"):
-        sign = 1 if Type in ("M+","P+") else -1
-        if Type in ("M+","M-"):
-            P_1 = sign*Q*((-6*a)/(L**2)+(6*(a**2))/(L**3))
-            P_2 = sign*Q*(1-((4*a)/L)+(3*(a**2)/(L**2)))
-            P_3 = sign*Q*(((6*a)/(L**2))-((6*(a**2))/(L**3)))
-            P_4 = sign*Q*((-(2*a)/L)+(3*(a**2)/(L**2)))
-        else:
-            P_1 = sign*Q*(1-(3*(a**2)/(L**2))+(2*(a**3)/(L**3)))
-            P_2 = sign*Q*(a-(2*(a**2)/L)+((a**3)/(L**2)))
-            P_3 = sign*Q*((3*(a**2)/(L**2))-(2*(a**3)/(L**3)))
-            P_4 = sign*Q*((-(a**2)/L)+((a**3)/(L**2)))
-        P1=-sin(alpha)*P_1; P2=cos(alpha)*P_1; P3=P_2
-        P4=-sin(alpha)*P_3; P5=cos(alpha)*P_3; P6=P_4
+    Ke, L = compute_Ke(i,j)
+    if Ke is None:
+        P_list.append([0]*6)
     else:
-        P1=P2=P3=P4=P5=P6=0
-    P_list.append([P1,P2,P3,P4,P5,P6])
-    st.text(np.round([P1,P2,P3,P4,P5,P6],5))
+        alpha = radians(degrees(np.arctan2(coords[j][1]-coords[i][1], coords[j][0]-coords[i][0])))
+        if Type=="p0+":
+            P1=(Q*L*cos(alpha))/2; P2=-(Q*L*sin(alpha))/2; P3=0
+            P4=P1; P5=P2; P6=0
+        elif Type=="p0-":
+            P1=-(Q*L*cos(alpha))/2; P2=(Q*L*sin(alpha))/2; P3=0
+            P4=P1; P5=P2; P6=0
+        elif Type=="q0+":
+            P_1=(Q*L)/2; P_2=(Q*L**2)/12; P_3=(Q*L)/2; P_4=-(Q*L**2)/12
+            P1=-sin(alpha)*P_1; P2=cos(alpha)*P_1; P3=P_2
+            P4=-sin(alpha)*P_3; P5=cos(alpha)*P_3; P6=P_4
+        elif Type=="q0-":
+            P_1=-(Q*L)/2; P_2=-(Q*L**2)/12; P_3=-(Q*L)/2; P_4=(Q*L**2)/12
+            P1=-sin(alpha)*P_1; P2=cos(alpha)*P_1; P3=P_2
+            P4=-sin(alpha)*P_3; P5=cos(alpha)*P_3; P6=P_4
+        else:
+            sign = 1 if Type in ("M+","P+") else -1
+            if Type in ("M+","M-"):
+                P_1 = sign*Q*((-6*a)/(L**2)+(6*a**2)/(L**3))
+                P_2 = sign*Q*(1-((4*a)/L)+(3*a**2)/(L**2))
+                P_3 = sign*Q*(((6*a)/(L**2))-((6*a**2)/(L**3)))
+                P_4 = sign*Q*((-(2*a)/L)+(3*a**2)/(L**2))
+            else:
+                P_1 = sign*Q*(1-(3*a**2)/(L**2)+(2*a**3)/(L**3))
+                P_2 = sign*Q*(a-(2*a**2)/L+(a**3)/(L**2))
+                P_3 = sign*Q*((3*a**2)/(L**2)-(2*a**3)/(L**3))
+                P_4 = sign*Q*((-(a**2)/L)+((a**3)/(L**2)))
+            P1 = -sin(alpha)*P_1; P2=cos(alpha)*P_1; P3=P_2
+            P4 = -sin(alpha)*P_3; P5=cos(alpha)*P_3; P6=P_4
+        P_list.append([P1,P2,P3,P4,P5,P6])
+    st.text(np.round(P_list[-1],5))
 
-# --- Nhập tải tại DOF (đổi B_expr → Pn_expr) ---
-st.subheader("Nhập tải tại DOF (Pn)")
+# --- Nhập tải tại DOF Pn dưới dạng biểu thức ---
+st.subheader("Nhập tải tại DOF (Pn biểu thức)")
 Pn_expr = []
 for i in range(total_dof):
     s = st.text_input(f"Pn[{i+1}]", "0", key=f"Pn{i}")
@@ -154,62 +159,73 @@ for i in range(total_dof):
     except:
         Pn_expr.append("0")
 
-# --- Tính Global Load Vector P_global (Pe + Pn) ---
-P_global = None
+# --- Tính Global Load Vector P (cộng Pe + Pn, giữ ẩn) ---
+P_global_expr = []
 if st.button("Tính Global Load Vector P"):
-    # lắp Pe
+    # assemble Pe numeric
     P_elem = np.zeros((total_dof,1))
     for k, pe in enumerate(P_list):
         dofs = index_elems[k]
         for m,val in zip(dofs,pe):
             P_elem[m,0] += val
-    # cộng Pn
-    P_global = np.zeros((total_dof,1))
-    st.subheader("Vector tải tổng thể P")
+    # cộng với Pn_expr
+    st.subheader("Vector tải toàn thể P (biểu thức)")
     for i in range(total_dof):
-        num_pe = P_elem[i,0]
-        expr = sympify(Pn_expr[i])
-        total = simplify(expr + num_pe)
-        P_global[i,0] = float(np.round(float(total),5))
-        st.write(f"P[{i+1}] = {total}")
+        pe_i = P_elem[i,0]
+        expr_i = sympify(Pn_expr[i])
+        total_i = simplify(expr_i + pe_i)
+        P_global_expr.append(total_i)
+        st.write(f"P[{i+1}] = {expr_i} + {pe_i} = **{total_i}**")
 
-# --- Nhập q=0 & tính q ---
-q_full = None
-st.subheader("Điều kiện q = 0 (cố định DOF)")
-q_known = []
-s = st.text_input("Indices q=0 (vd: 1 4 5)", "", key="qfix")
-if s:
-    try:
-        q_known = [int(x)-1 for x in s.split()]
-    except:
-        st.warning("Định dạng sai")
-
+# --- Nhập q_known & giải q symbolically ---
+q_full_expr = None
 if st.button("Tính chuyển vị q"):
-    if P_global is None:
+    if not P_global_expr:
         st.error("Phải tính Global Load Vector trước")
     else:
-        Km = np.delete(K_global, q_known, axis=0)
-        Km = np.delete(Km, q_known, axis=1)
-        Pm = np.delete(P_global, q_known, axis=0)
-        sol = np.linalg.solve(E*Km, Pm)
-        q_full = np.zeros((total_dof,1))
-        cnt = 0
-        for i in range(total_dof):
-            if i in q_known:
-                q_full[i,0] = 0
-            else:
-                q_full[i,0] = sol[cnt,0]; cnt += 1
-        st.subheader("Vector chuyển vị q")
-        st.text(np.round(q_full,5))
+        # chuẩn bị: tạo biến q1..qn
+        q = Matrix([Symbol(f"q{i+1}") for i in range(total_dof)])
+        # K* q = P
+        K_sym = Matrix(E * K_global)  # numeric * E
+        P_sym = Matrix(P_global_expr)
+        # cân bằng
+        balance = K_sym * q - P_sym
+        # chọn phương trình cho các q_unknown
+        s = st.text_input("Indices q=0 (vd: 1 4 5)", "", key="qfix")
+        q_known = []
+        if s:
+            try:
+                q_known = [int(x)-1 for x in s.split()]
+            except:
+                st.warning("Định dạng sai q=0")
+        unknowns = [q[i] for i in range(total_dof) if i not in q_known]
+        eqs = [balance[i] for i in range(total_dof) if i not in q_known]
+        sol_list = solve(eqs, unknowns, dict=True)
+        if sol_list:
+            sol = sol_list[0]
+            q_full_expr = []
+            for i in range(total_dof):
+                if i in q_known:
+                    q_full_expr.append(0)
+                else:
+                    q_full_expr.append(sol[q[i]])
+            st.subheader("Vector chuyển vị q (biểu thức)")
+            for i,val in enumerate(q_full_expr,1):
+                st.write(f"q[{i}] = {val}")
+        else:
+            st.error("Không giải được q symbolically")
 
-# --- Tính phản lực liên kết R ---
+# --- Tính phản lực liên kết R symbolically ---
 if st.button("Tính phản lực liên kết R"):
-    if q_full is None:
+    if q_full_expr is None:
         st.error("Phải tính q trước")
     else:
-        R = np.dot(K_global, q_full)
+        q_vec = Matrix(q_full_expr)
+        K_sym = Matrix(E * K_global)
+        R = K_sym * q_vec
         st.subheader("Vector phản lực liên kết R")
-        st.text(np.round(R,5))
+        for i,val in enumerate(R,1):
+            st.write(f"R[{i}] = {val}")
 
 # --- Hướng dẫn ---
 with st.expander("📘 Hướng dẫn sử dụng"):
@@ -220,7 +236,7 @@ with st.expander("📘 Hướng dẫn sử dụng"):
 4. Nhập cấu trúc phần tử (i→j).
 5. Nhập DOF indices cho mỗi phần tử.
 6. Vẽ sơ đồ khung.
-7. Tính Ke & K.
+7. Tính Ke & K tổng thể.
 8. Nhập a, Type, Q → tính Pe.
 9. Nhập Pn biểu thức tại DOF → tính Global Load Vector P.
 10. Nhập q=0 → tính chuyển vị q.
