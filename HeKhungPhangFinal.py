@@ -182,9 +182,19 @@ st.subheader("Nhập tải tại DOF (Pn biểu thức)")
 Pn_expr = []
 for i in range(total_dof):
     s = st.text_input(f"Pn[{i+1}]", "0", key=f"Pn{i}")
-    expr = str(simplify(sympify(s)))
-    Pn_expr.append(expr)
-    st.write(f"Pn[{i+1}] = {expr}")
+    try:
+        expr_user = sympify(s)
+    except:
+        expr_user = sympify("0")
+
+    # Nếu đã có P_elem, cộng vào
+    if st.session_state.P_elem is not None:
+        pe_val = float(st.session_state.P_elem[i, 0])
+        expr_total = simplify(expr_user + pe_val)
+    else:
+        expr_total = simplify(expr_user)
+    Pn_expr.append(str(expr_total))
+    st.write(f"Pn[{i+1}] = {expr_total}")
 st.session_state.Pn_expr = Pn_expr
 
 # --- Nhập q_known ngoài nút ---
@@ -223,7 +233,7 @@ if st.button("Tính chuyển vị q"):
 # --- Tính phản lực liên kết symbolically từ Pn_expr và q_full ---
 if st.button("Tính PLLK (phản lực liên kết)"):
     if st.session_state.q_full is None or st.session_state.K_global is None:
-        st.error("Phải tính q_full và K_global trước")
+        st.error("Phải tính q và K trước")
     else:
         # P_goc = K_global * E * q_full
         P_goc = np.dot(st.session_state.K_global, E * st.session_state.q_full).flatten()
