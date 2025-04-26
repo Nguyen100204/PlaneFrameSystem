@@ -179,9 +179,7 @@ with st.expander("📘 Hướng dẫn sử dụng"):
 11. Bấm **"Tính phản lực liên kết R"**.
 """)
 
-
-
-📌 Lưu ý:
+  Lưu ý:
 - Mỗi node có 3 bậc tự do (dof): dịch chuyển x, dịch chuyển y, quay.
 - Chỉ số q bắt đầu từ 1.
     """)
